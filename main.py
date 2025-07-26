@@ -9,7 +9,7 @@ from deep_translator import GoogleTranslator
 
 # 🔐 Token va Webhook URL
 API_TOKEN = os.getenv("BOT_TOKEN", "YOUR_REAL_TOKEN")
-WEBHOOK_SECRET = 'my-secret-token'
+WEBHOOK_SECRET = 'my_super_secret_key'
 WEBHOOK_PATH = '/webhook'
 WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"https://your-app.onrender.com{WEBHOOK_PATH}")
 
