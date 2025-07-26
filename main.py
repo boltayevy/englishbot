@@ -1,118 +1,97 @@
 import logging
 import os
-
-from aiogram import Bot, Dispatcher, types
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message
+from aiogram.enums.parse_mode import ParseMode
+from aiogram.client.default import DefaultBotProperties
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiohttp import web
+from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
 
-# 🔐 Token va Webhook URL
-API_TOKEN = os.getenv("BOT_TOKEN", "YOUR_REAL_TOKEN")
-WEBHOOK_SECRET = 'my_super_secret_key'
-WEBHOOK_PATH = '/webhook'
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", f"https://your-app.onrender.com{WEBHOOK_PATH}")
+# .env fayldan o'qish
+load_dotenv()
 
-# 📋 Log
+API_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_PATH = os.getenv("WEBHOOK_PATH")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
+# Log sozlash
 logging.basicConfig(level=logging.INFO)
 
-# 🤖 Bot va dispatcher
-bot = Bot(token=API_TOKEN, parse_mode="HTML")
+# Botni yaratish
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
 
-# 🌐 Foydalanuvchi tili saqlanadi (user_id -> til)
+# Foydalanuvchi tillari
 user_languages = {}
 
 
-# 🔤 Tarjima funksiyasi
 def translate(text, target_lang):
     return GoogleTranslator(source='auto', target=target_lang).translate(text)
 
 
-# 🚀 /start komandasi
-@dp.message(commands=["start"])
-async def start_handler(message: types.Message):
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("🇺🇿 O'zbekcha", "🇷🇺 Русский", "🇬🇧 English")
-    await message.reply(
-        "👋 Assalomu alaykum!\nMen siz yozgan matnni tanlagan tilga tarjima qilaman.\n\n⬇ Iltimos, tilni tanlang:",
-        reply_markup=kb
+@dp.message(F.text == "/start")
+async def start_handler(message: Message):
+    kb = [
+        [{"text": "🇺🇿 O'zbekcha"}, {"text": "🇷🇺 Русский"}, {"text": "🇬🇧 English"}]
+    ]
+    await message.answer(
+        "👋 Salom! Men matnni siz tanlagan tilga tarjima qilaman.\n\n⬇ Tilni tanlang:",
+        reply_markup={"keyboard": kb, "resize_keyboard": True}
     )
 
 
-# 🌍 Til tanlash
-@dp.message(lambda msg: msg.text in ["🇺🇿 O'zbekcha", "🇷🇺 Русский", "🇬🇧 English"])
-async def set_language(message: types.Message):
+@dp.message(F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский", "🇬🇧 English"]))
+async def language_selected(message: Message):
     lang_map = {"🇺🇿 O'zbekcha": "uz", "🇷🇺 Русский": "ru", "🇬🇧 English": "en"}
     user_languages[message.from_user.id] = lang_map[message.text]
-    await message.reply(
-        f"✅ Siz {message.text} tilini tanladingiz.\nTarjima qilish uchun matn yuboring.",
-        reply_markup=types.ReplyKeyboardRemove()
+    await message.answer(
+        f"✅ Til tanlandi: {message.text}\nEndi tarjima qilinadigan matnni yuboring.",
+        reply_markup={"remove_keyboard": True}
     )
 
 
-# ✍ Matn tarjimasi
-@dp.message()
-async def translate_handler(message: types.Message):
+@dp.message(F.text)
+async def translate_handler(message: Message):
     lang = user_languages.get(message.from_user.id)
     if not lang:
-        await message.reply("Iltimos, avval /start buyrug'ini bosib tilni tanlang.")
+        await message.answer("Iltimos, avval tilni tanlang. /start buyrug‘ini bosing.")
         return
 
-    await bot.send_chat_action(message.chat.id, "typing")  # Typing animatsiya
-
     try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         translated = translate(message.text, lang)
-        await message.reply(f"🔁 Tarjima:\n<code>{translated}</code>")
-    except Exception as e:
-        logging.error(f"Tarjima xatosi: {e}")
-        await message.reply("❌ Tarjima qilishda xatolik yuz berdi.")
+        await message.answer(f"🔁 Tarjima:\n<code>{translated}</code>")
+    except Exception:
+        await message.answer("❌ Tarjima qilishda xatolik yuz berdi. Qayta urinib ko‘ring.")
 
 
-# 👤 /admin komandasi
-@dp.message(commands=["admin"])
-async def admin_handler(message: types.Message):
-    kb = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text="📞 Bog‘lanish", url="https://t.me/masterplay707")],
-        [types.InlineKeyboardButton(text="💰 Premium olish", callback_data="buy_premium")]
-    ])
-    await message.reply("Admin bilan bog‘lanish yoki premium olish:", reply_markup=kb)
+@dp.message(F.text == "/admin")
+async def admin_handler(message: Message):
+    await message.answer("📞 Bog‘lanish uchun admin: @masterplay707")
 
 
-# 🆘 /help komandasi
-@dp.message(commands=["help"])
-async def help_handler(message: types.Message):
-    await message.reply(
-        "ℹ️ Men siz yuborgan matnni tanlagan tilga tarjima qilaman.\n"
-        "Tilni tanlash uchun /start ni bosing.\n"
-        "Admin uchun: /admin"
+@dp.message(F.text == "/help")
+async def help_handler(message: Message):
+    await message.answer(
+        "ℹ️ Matn yuboring, men uni tanlangan tilga tarjima qilaman. Tilni o‘zgartirish uchun /start ni bosing."
     )
 
 
-# 💰 Premium funksiya (kelajakda to‘liq qilish uchun tayyor)
-@dp.callback_query(lambda c: c.data == "buy_premium")
-async def buy_premium(call: types.CallbackQuery):
-    await call.message.edit_text(
-        "🚀 Premium xususiyatlar hozirda tayyorlanmoqda.\n\n"
-        "✅ Yaqin orada quyidagilar qo‘shiladi:\n"
-        "- 🔊 Ovozli tarjima\n"
-        "- 🗂 Ko‘p tilli matnlar\n"
-        "- 📈 Statistika va o‘z tarixingiz\n\n"
-        "👤 Admin bilan bog‘lanish: @masterplay707"
-    )
-
-
-# 🔗 Webhook uchun
-async def on_startup(bot: Bot):
-    await bot.set_webhook(WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
+# Webhookni sozlash
+async def on_startup(dispatcher: Dispatcher, bot: Bot):
+    await bot.set_webhook(WEBHOOK_URL)
 
 
 def create_app():
     app = web.Application()
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET).register(app, path=WEBHOOK_PATH)
-    app.on_startup.append(lambda _: on_startup(bot))
+    app.on_startup.append(on_startup)
     return app
 
 
-if __name__ == '__main__':
-    web.run_app(create_app(), host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+if __name__ == "__main__":
+    web.run_app(create_app(), port=8000)
