@@ -1,67 +1,98 @@
-# main.py
 import logging
 import os
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import Message
+from datetime import datetime
+
+from aiogram import Bot, Dispatcher, F
+from aiogram.client.default import DefaultBotProperties
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 from dotenv import load_dotenv
-from datetime import datetime
+from deep_translator import GoogleTranslator
 
-# Load environment variables
+# Load .env
 load_dotenv()
 API_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Bot and Dispatcher
-bot = Bot(token=API_TOKEN, default=types.DefaultBotProperties(parse_mode="HTML"))
+bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher(storage=MemoryStorage())
 
-# User statistics (for demo purpose only)
+user_languages = {}
 users_db = {}
+
+def translate(text, target_lang):
+    return GoogleTranslator(source='auto', target=target_lang).translate(text)
 
 @dp.message(F.text == "/start")
 async def cmd_start(message: Message):
     user_id = message.from_user.id
-    now = datetime.now()
-    users_db[user_id] = now
-    await message.answer("Salom! Bot ishga tushdi.\n/statistics buyrug'i orqali statistikani ko'rishingiz mumkin.")
+    users_db[user_id] = datetime.now()
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add(KeyboardButton("🇺🇿 O'zbekcha"), KeyboardButton("🇷🇺 Русский"), KeyboardButton("🇬🇧 English"))
+    await message.answer(
+        "👋 Salom! Tilni tanlang:",
+        reply_markup=kb
+    )
+
+@dp.message(F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский", "🇬🇧 English"]))
+async def choose_language(message: Message):
+    lang_map = {"🇺🇿 O'zbekcha": "uz", "🇷🇺 Русский": "ru", "🇬🇧 English": "en"}
+    user_languages[message.from_user.id] = lang_map[message.text]
+    await message.answer(f"✅ Til tanlandi: {message.text}. Endi matn yozing.", reply_markup={"remove_keyboard": True})
+
+@dp.message(F.text & (~F.command))
+async def translate_handler(message: Message):
+    lang = user_languages.get(message.from_user.id)
+    if not lang:
+        await message.answer("Iltimos, tilni tanlang. /start buyrug‘ini bosing.")
+        return
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    try:
+        result = translate(message.text, lang)
+        await message.answer(f"🔁 Tarjima natijasi:\n<code>{result}</code>")
+    except Exception as e:
+        logger.error(f"Error in translation: {e}")
+        await message.answer("❌ Xatolik yuz berdi.")
 
 @dp.message(F.text == "/statistics")
-async def get_statistics(message: Message):
+async def cmd_stats(message: Message):
     now = datetime.now()
-    today = [dt for dt in users_db.values() if dt.date() == now.date()]
-    week = [dt for dt in users_db.values() if (now - dt).days < 7]
-    month = [dt for dt in users_db.values() if (now - dt).days < 30]
     total = len(users_db)
-    await message.answer(f"<b>📊 Statistika:</b>\n\nTotal foydalanuvchilar: {total}\nBugun: {len(today)}\nBu hafta: {len(week)}\nBu oy: {len(month)}")
+    today = len([d for d in users_db.values() if d.date() == now.date()])
+    week = len([d for d in users_db.values() if (now - d).days < 7])
+    month = len([d for d in users_db.values() if (now - d).days < 30])
+    await message.answer(f"<b>Statistika</b>\n\nUmumiy: {total}\nBugun: {today}\nBu hafta: {week}\nBu oy: {month}")
 
 @dp.message(F.text == "/admin")
-async def get_admin_info(message: Message):
-    await message.answer("<b>👨‍💻 Admin:</b> @your_admin_username")
+async def cmd_admin(message: Message):
+    await message.answer("👨‍💻 Admin: @masterplay707")
+
+@dp.message(F.text == "/help")
+async def cmd_help(message: Message):
+    await message.answer("🔹 /start – tilni tanlash\n🔹 /statistics – statistika\n🔹 Tarjima qilish uchun matn yozing.")
 
 async def on_startup(app: web.Application):
-    await bot.set_webhook(WEBHOOK_URL)
-    logger.info("Webhook o'rnatildi: %s", WEBHOOK_URL)
+    await bot.set_webhook(WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
+    logger.info("Webhook set: %s", WEBHOOK_URL)
 
 async def on_shutdown(app: web.Application):
     await bot.delete_webhook()
-    logger.info("Webhook o'chirildi.")
+    logger.info("Webhook deleted")
 
 def create_app():
     app = web.Application()
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
     SimpleRequestHandler(dispatcher=dp, bot=bot, secret_token=WEBHOOK_SECRET).register(app, path=WEBHOOK_PATH)
-    setup_application(app, dp)
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    setup_application(app, dp, bot=bot)
     return app
 
 if __name__ == "__main__":
-    web.run_app(create_app(), port=8000)
+    web.run_app(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
