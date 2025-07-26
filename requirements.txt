@@ -2,3 +2,4 @@ aiogram==2.25.2
 Flask==2.3.3
 python-dotenv==1.0.1
 deep-translator==1.11.4
+aiohttp
