@@ -4,13 +4,13 @@ from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, KeyboardButtonPollType, ReplyKeyboardRemove
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.enums import ChatAction
 
 # Load .env
 load_dotenv()
@@ -35,26 +35,26 @@ def translate(text, target_lang):
 async def cmd_start(message: Message):
     user_id = message.from_user.id
     users_db[user_id] = datetime.now()
-    # kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🔤 Inglizcha so'z")],
-        [KeyboardButton(text="📚 Darsni boshlash")],
-        [KeyboardButton(text="📞 Admin bilan bog'lanish")]
-    ],
-    resize_keyboard=True
-)
-    kb.add(KeyboardButton("🇺🇿 O'zbekcha"), KeyboardButton("🇷🇺 Русский"), KeyboardButton("🇬🇧 English"))
-    await message.answer(
-        "👋 Salom! Tilni tanlang:",
-        reply_markup=kb
+        keyboard=[
+            [KeyboardButton(text="🔤 Inglizcha so'z")],
+            [KeyboardButton(text="📚 Darsni boshlash")],
+            [KeyboardButton(text="📞 Admin bilan bog'lanish")],
+            [
+                KeyboardButton(text="🇺🇿 O'zbekcha"),
+                KeyboardButton(text="🇷🇺 Русский"),
+                KeyboardButton(text="🇬🇧 English")
+            ]
+        ],
+        resize_keyboard=True
     )
+    await message.answer("👋 Salom! Tilni tanlang:", reply_markup=kb)
 
 @dp.message(F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский", "🇬🇧 English"]))
 async def choose_language(message: Message):
     lang_map = {"🇺🇿 O'zbekcha": "uz", "🇷🇺 Русский": "ru", "🇬🇧 English": "en"}
     user_languages[message.from_user.id] = lang_map[message.text]
-    await message.answer(f"✅ Til tanlandi: {message.text}. Endi matn yozing.", reply_markup={"remove_keyboard": True})
+    await message.answer(f"✅ Til tanlandi: {message.text}. Endi matn yozing.", reply_markup=ReplyKeyboardRemove())
 
 @dp.message(F.text & (~F.command))
 async def translate_handler(message: Message):
@@ -62,7 +62,7 @@ async def translate_handler(message: Message):
     if not lang:
         await message.answer("Iltimos, tilni tanlang. /start buyrug‘ini bosing.")
         return
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    await bot.send_chat_action(chat_id=message.chat.id, action=ChatAction.TYPING)
     try:
         result = translate(message.text, lang)
         await message.answer(f"🔁 Tarjima natijasi:\n<code>{result}</code>")
@@ -77,15 +77,15 @@ async def cmd_stats(message: Message):
     today = len([d for d in users_db.values() if d.date() == now.date()])
     week = len([d for d in users_db.values() if (now - d).days < 7])
     month = len([d for d in users_db.values() if (now - d).days < 30])
-    await message.answer(f"<b>Statistika</b>\n\nUmumiy: {total}\nBugun: {today}\nBu hafta: {week}\nBu oy: {month}")
+    await message.answer(f"<b>📊 Statistika</b>\n\n<b>Umumiy foydalanuvchilar:</b> {total}\n<b>Bugun qo‘shilganlar:</b> {today}\n<b>Haftalik:</b> {week}\n<b>Oylik:</b> {month}")
 
 @dp.message(F.text == "/admin")
 async def cmd_admin(message: Message):
-    await message.answer("👨‍💻 Admin: @masterplay707")
+    await message.answer("👨‍💻 Admin bilan bog'lanish: @masterplay707")
 
 @dp.message(F.text == "/help")
 async def cmd_help(message: Message):
-    await message.answer("🔹 /start – tilni tanlash\n🔹 /statistics – statistika\n🔹 Tarjima qilish uchun matn yozing.")
+    await message.answer("ℹ️ Yordam:\n\n🔹 /start – Botni ishga tushurish\n🔹 Tilni tanlang va matn kiriting – Tarjima qilish uchun\n🔹 /statistics – Foydalanuvchi statistikasi\n🔹 /admin – Admin bilan bog'lanish")
 
 async def on_startup(app: web.Application):
     await bot.set_webhook(WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
