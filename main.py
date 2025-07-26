@@ -10,6 +10,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 # Load .env
 load_dotenv()
@@ -34,7 +35,15 @@ def translate(text, target_lang):
 async def cmd_start(message: Message):
     user_id = message.from_user.id
     users_db[user_id] = datetime.now()
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    # kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="🔤 Inglizcha so'z")],
+        [KeyboardButton(text="📚 Darsni boshlash")],
+        [KeyboardButton(text="📞 Admin bilan bog'lanish")]
+    ],
+    resize_keyboard=True
+)
     kb.add(KeyboardButton("🇺🇿 O'zbekcha"), KeyboardButton("🇷🇺 Русский"), KeyboardButton("🇬🇧 English"))
     await message.answer(
         "👋 Salom! Tilni tanlang:",
