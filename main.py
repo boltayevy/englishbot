@@ -1,16 +1,17 @@
 import logging
 import os
 from datetime import datetime
-
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, KeyboardButtonPollType, ReplyKeyboardRemove
+from aiogram.enums import ChatAction
+from aiogram.types import (
+    Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+)
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 from dotenv import load_dotenv
 from deep_translator import GoogleTranslator
-from aiogram.enums import ChatAction
 
 # Load .env
 load_dotenv()
@@ -52,9 +53,54 @@ async def cmd_start(message: Message):
 
 @dp.message(F.text.in_(["🇺🇿 O'zbekcha", "🇷🇺 Русский", "🇬🇧 English"]))
 async def choose_language(message: Message):
-    lang_map = {"🇺🇿 O'zbekcha": "uz", "🇷🇺 Русский": "ru", "🇬🇧 English": "en"}
+    lang_map = {
+        "🇺🇿 O'zbekcha": "uz",
+        "🇷🇺 Русский": "ru",
+        "🇬🇧 English": "en"
+    }
     user_languages[message.from_user.id] = lang_map[message.text]
     await message.answer(f"✅ Til tanlandi: {message.text}. Endi matn yozing.", reply_markup=ReplyKeyboardRemove())
+
+@dp.message(F.text == "📞 Admin bilan bog'lanish")
+async def contact_admin(message: Message):
+    await message.answer("👨‍💻 Admin: @masterplay707")
+
+@dp.message(F.text == "📚 Darsni boshlash")
+async def start_lesson(message: Message):
+    await message.answer("📘 Hozircha dars moduli yo‘q. Tez orada qo‘shiladi!")
+
+@dp.message(F.text == "🔤 Inglizcha so'z")
+async def random_word(message: Message):
+    await message.answer("📝 Bu bo‘lim ham tez orada ishga tushadi.")
+
+@dp.message(F.text == "/statistics")
+async def cmd_stats(message: Message):
+    now = datetime.now()
+    total = len(users_db)
+    today = len([d for d in users_db.values() if d.date() == now.date()])
+    week = len([d for d in users_db.values() if (now - d).days < 7])
+    month = len([d for d in users_db.values() if (now - d).days < 30])
+    await message.answer(
+        f"<b>📊 Statistika</b>\n\n"
+        f"<b>Umumiy foydalanuvchilar:</b> {total}\n"
+        f"<b>Bugun qo‘shilganlar:</b> {today}\n"
+        f"<b>Haftalik:</b> {week}\n"
+        f"<b>Oylik:</b> {month}"
+    )
+
+@dp.message(F.text == "/admin")
+async def cmd_admin(message: Message):
+    await message.answer("👨‍💻 Admin bilan bog'lanish: @masterplay707")
+
+@dp.message(F.text == "/help")
+async def cmd_help(message: Message):
+    await message.answer(
+        "ℹ️ Yordam:\n\n"
+        "🔹 /start – Botni ishga tushurish\n"
+        "🔹 Tilni tanlang va matn kiriting – Tarjima qilish uchun\n"
+        "🔹 /statistics – Foydalanuvchi statistikasi\n"
+        "🔹 /admin – Admin bilan bog'lanish"
+    )
 
 @dp.message(F.text & (~F.command))
 async def translate_handler(message: Message):
@@ -68,32 +114,16 @@ async def translate_handler(message: Message):
         await message.answer(f"🔁 Tarjima natijasi:\n<code>{result}</code>")
     except Exception as e:
         logger.error(f"Error in translation: {e}")
-        await message.answer("❌ Xatolik yuz berdi.")
+        await message.answer("❌ Tarjima qilishda xatolik yuz berdi.")
 
-@dp.message(F.text == "/statistics")
-async def cmd_stats(message: Message):
-    now = datetime.now()
-    total = len(users_db)
-    today = len([d for d in users_db.values() if d.date() == now.date()])
-    week = len([d for d in users_db.values() if (now - d).days < 7])
-    month = len([d for d in users_db.values() if (now - d).days < 30])
-    await message.answer(f"<b>📊 Statistika</b>\n\n<b>Umumiy foydalanuvchilar:</b> {total}\n<b>Bugun qo‘shilganlar:</b> {today}\n<b>Haftalik:</b> {week}\n<b>Oylik:</b> {month}")
-
-@dp.message(F.text == "/admin")
-async def cmd_admin(message: Message):
-    await message.answer("👨‍💻 Admin bilan bog'lanish: @masterplay707")
-
-@dp.message(F.text == "/help")
-async def cmd_help(message: Message):
-    await message.answer("ℹ️ Yordam:\n\n🔹 /start – Botni ishga tushurish\n🔹 Tilni tanlang va matn kiriting – Tarjima qilish uchun\n🔹 /statistics – Foydalanuvchi statistikasi\n🔹 /admin – Admin bilan bog'lanish")
-
+# Webhook uchun
 async def on_startup(app: web.Application):
     await bot.set_webhook(WEBHOOK_URL, secret_token=WEBHOOK_SECRET)
-    logger.info("Webhook set: %s", WEBHOOK_URL)
+    logger.info(f"Webhook o‘rnatildi: {WEBHOOK_URL}")
 
 async def on_shutdown(app: web.Application):
     await bot.delete_webhook()
-    logger.info("Webhook deleted")
+    logger.info("Webhook olib tashlandi")
 
 def create_app():
     app = web.Application()
@@ -104,4 +134,4 @@ def create_app():
     return app
 
 if __name__ == "__main__":
-    web.run_app(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+    web.run_app(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
